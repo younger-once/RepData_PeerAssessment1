@@ -47,9 +47,8 @@ steps_per_day <- df %>% filter(!is.na(steps)) %>%
   summarise(steps = sum(steps)) 
 
 # table of total steps per day
-datatable(steps_per_day, options = list(pageLength = 10,
-                                        columnDefs= list(list(className = 'dt-right',
-                                                              targets = "_all"))))
+kable(steps_per_day)
+
 ```
   
 Here is a line plot representation of steps per day over time:
@@ -96,9 +95,8 @@ steps_per_interval <- df %>%
   summarise(steps = mean(steps))
 
 # table of total steps per time interval
-datatable(steps_per_interval, options = list(pageLength = 10,
-                         columnDefs= list(list(className = 'dt-right',targets = "_all")))) %>% 
-  formatRound(columns = "steps",digits=2)
+kable(steps_per_interval, digits=1)
+
 ```
 
 Below is a line plot of steps per interval
@@ -111,9 +109,6 @@ max_int <- steps_per_interval$interval[steps_per_interval$steps == max(steps_per
 ggplot(steps_per_interval, aes(interval,steps)) + geom_line() + 
   labs(title="Mean Steps per Time Interval") +
   geom_vline(xintercept=max_int,color='red', linetype = "dashed") 
-
-  
-  
 ```
 
 #### 2. Display interval with maximum steps  
