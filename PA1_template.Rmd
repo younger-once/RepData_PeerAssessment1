@@ -3,23 +3,218 @@ title: "Reproducible Research: Peer Assessment 1"
 output: 
   html_document:
     keep_md: true
+    theme: yeti
+    highlight: zenburn
 ---
-
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, comment = NA, warning = FALSE)
+```
 
 ## Loading and preprocessing the data
 
+#### 1) Install / load necessary libraries  
+
+```{r}
+# install packages if needed, otherwise load in libraries
+if(!require(pacman)) install.packages('pacman')
+pacman::p_load(tidyverse,DT, knitr, lattice)
+
+# set default theme for ggplot graphs
+theme_set(theme_minimal())
+```
+
+#### 2) Unzip and read data file
+```{r}
+# unzip and read activity data as data frame
+df <- read.csv(unz("activity.zip", "activity.csv"), colClasses = c("integer","Date","integer"),
+               stringsAsFactors = F)
+```
 
 
-## What is mean total number of steps taken per day?
+## What is mean total number of steps taken per day?  
+  
+Note: summary statistics and plots below ignore all observations with `NAs`.  
+  
+#### 1) Calculate total number of steps per day.  
+  
+Below is a summary of steps per day in table form:  
 
+```{r echo=TRUE}
+# calculate total steps per day; filter out missing observations
+steps_per_day <- df %>% filter(!is.na(steps)) %>% 
+  group_by(date) %>%
+  summarise(steps = sum(steps)) 
 
+# table of total steps per day
+datatable(steps_per_day, options = list(pageLength = 10,
+                                        columnDefs= list(list(className = 'dt-right',
+                                                              targets = "_all"))))
+```
+  
+Here is a line plot representation of steps per day over time:
 
+```{r fig.align = 'center'}
+# plot steps per day
+ggplot(steps_per_day, aes(date,steps)) + geom_line() + 
+  labs(title = "Steps per Day")
+```
+  
+#### 2) Create histogram of steps per day  
+  
+```{r fig.align = 'center'}
+# plot distribution of steps/day
+ggplot(steps_per_day, aes(steps)) + geom_histogram(bins=20) + 
+  labs(title = "Steps per Day")
+```
+  
+#### 3. Calculate mean and median steps per day  
+  
+```{r}
+kable(
+  steps_per_day %>%
+    summarise(
+      meanStepsDay = mean(steps),
+      medianStepsDay = median(steps)
+      ),
+  format.args = list(big.mark = ","),
+  digits = 0,
+  col.names = c("Mean Steps per Day", "Median Steps per Day")
+  )
+
+```
 ## What is the average daily activity pattern?
+  
+#### 1. Make a time series plot of 5-minute interval and avg. steps taken
 
+Let's first look at the steps by interval in table form.  
+```{r}
+# calculate mean steps per time interval
+steps_per_interval <- df %>%
+  filter(!is.na(steps)) %>% 
+  group_by(interval) %>% 
+  summarise(steps = mean(steps))
+
+# table of total steps per time interval
+datatable(steps_per_interval, options = list(pageLength = 10,
+                         columnDefs= list(list(className = 'dt-right',targets = "_all")))) %>% 
+  formatRound(columns = "steps",digits=2)
+```
+
+Below is a line plot of steps per interval
+
+```{r}
+# find interval with maximum steps
+max_int <- steps_per_interval$interval[steps_per_interval$steps == max(steps_per_interval$steps)]
+
+# line plot of average steps per time interval
+ggplot(steps_per_interval, aes(interval,steps)) + geom_line() + 
+  labs(title="Mean Steps per Time Interval") +
+  geom_vline(xintercept=max_int,color='red', linetype = "dashed") 
+
+  
+  
+```
+
+#### 2. Display interval with maximum steps  
+```{r}
+paste("Time interval with maximum average steps: ", max_int)
+```
 
 
 ## Imputing missing values
 
+#### 1. Calculate total number of rows with NAs  
+  
+```{r}
+miss_rows <- sum(is.na(df$steps))
+paste("Number of missing rows:",miss_rows)
+```
+  
+#### 2. Develop method for encoding missing values  
+  
+Let's use impute missing values by using the mean step value for the given time interval.  The mean values are already available in the data frame, `steps_per_interval`. Below are the first five records from this summary-level dataset.  
+
+```{r}
+# print first few records of steps_per_interval
+kable(head(steps_per_interval), digits=1)
+
+```
+  
+#### 3. Create new dataset with imputed values where missing  
+  
+Below we create a new data frame using mean steps per interval to impute missing values.  
+  
+```{r}
+# create modified data frame with imputed missing step values
+df_mod <- df %>%
+  left_join(steps_per_interval, by="interval", suffix=c("","_imputed")) %>% 
+  mutate(steps = ifelse(is.na(steps),steps_imputed,steps)) %>% 
+  select(steps, date,interval)
+```
+#### 4. Create histogram and calculate mean and median steps using modified data frame
+
+```{r fig.align = "center"}
+# calculate total steps per day on modified df
+steps_per_day_mod <- df_mod %>% 
+  group_by(date) %>%
+  summarise(steps = sum(steps)) 
+
+# create histogram  of steps/day
+ggplot(steps_per_day_mod, aes(steps)) + geom_histogram(bins=20) + 
+  labs(title = "Steps per Day on Modified Data Frame")
+
+```
+```{r}
+# mean and median steps per data on imputed, modified data frame
+kable(
+  steps_per_day_mod %>%
+    summarise(
+      meanStepsDay = mean(steps),
+      medianStepsDay = median(steps)
+      ),
+  format.args = list(big.mark = ","),
+  digits = 0,
+  col.names = c("Mean Steps per Day", "Median Steps per Day")
+  )
+
+```
+
+  
+```{r}
+# compare mean of modified df against original with missing values
+diff_mean <- mean(steps_per_day_mod$steps) - mean(steps_per_day$steps)
+paste0("The mean steps per day using imputed values changed by ",diff_mean, " compared to the original data.")
+
+# compare median of modified df against original with missing values
+diff_median <- median(steps_per_day_mod$steps) - median(steps_per_day$steps)
+paste0("The median steps per day using imputed values changed by ",round(diff_median,2), " compared to the original data.")
 
 
-## Are there differences in activity patterns between weekdays and weekends?
+```
+
+## Are there differences in activity patterns between weekdays and weekends?  
+  
+#### 1. Create a new factor variable to determine if date is weekday or weekend.  
+```{r}
+df <- df %>% 
+  mutate(day_type = factor(ifelse(weekdays(date) %in% c("Saturday","Sunday"), "weekend","weekday")))
+
+```
+
+#### 2. Make a panel plot average steps per interval by weekend/weekday
+
+```{r fig.align="center"}
+# data frame to use for panel plot
+steps_day_type <- df %>% filter(!is.na(steps)) %>% 
+  group_by(day_type,interval) %>% 
+  summarise(steps=mean(steps))
+
+# panel plot
+ggplot(steps_day_type, aes(interval,steps)) + geom_line() +
+  facet_grid(day_type ~.) + labs(title = "Mean Steps by Time Interval and Day Type")
+```
+  
+The weekday line plot indicates prominent step activity in the morning (i.e. before 10am).  On the other hand, the weekend plot reveals consistently higher activity in the late morning through early evening.  
+
+
